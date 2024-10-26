@@ -1,0 +1,32 @@
+{
+    "test20241026": {
+        "env": "windows",
+        "inputpath": "C:/Users/admin/Documents/my_programs/CDLC_VER0/Configuration/",
+        "outputpath": "C:/Users/admin/Documents/my_programs/CDLC_VER0/Generate/",
+        "publishPort1": {
+            "message":"periodic",
+            "type":"publish",
+            "period":20
+        },
+        "consumePort1_1": {
+            "message":"periodic",
+            "type":"consume",
+            "method":"queue",
+            "length":10
+        },
+        "consumePort1_2": {
+            "message":"periodic",
+            "type":"consume",
+            "method":"sample",
+            "period":20
+        },
+        "publishPort2": {
+            "message":"event",
+            "type":"publish"
+        },
+        "consumePort2": {
+            "message":"event",
+            "type":"consume"
+        }
+    }
+}
