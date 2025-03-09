@@ -12,6 +12,10 @@
 
 #include "cdl.h"
 
+#define RECV_EVENT 1
+#define RECV_SAMPLING 2
+#define RECV_MSGQUEUE 3
+
 // JSON文件规范：每一行只能有一个信息。不能在一行定义多个变量
 // 左花括号({)在定义文件名和端口名时最好和它们在同一行
 // 右花括号要使用独立的一行,不能和变量定义放在同行
@@ -63,11 +67,21 @@ extern string gOutputPath;
 
 extern ENVIRONMENT environment;
 
+// 发送端口编号
+extern map<string, int> publish_flags;
+
+extern map<string, int> receive_periods;
+
 void AppendSlashToPath(string& path);
 bool ReadFromJsonFile(const string& path);
 bool copyFile(const std::string& sourcePath, const std::string& destPath);
 
 // CodeGeneration中用到的函数
 int getPublishPeriod(ComponentPortDesc *pPort);
+int getPublishPeriod(const string name);
+int getRecvType(const string name);
+int getRecvPeriod(ComponentPortDesc *pPort);
+int getRecvPeriod(const string name);
+int getRecvQueueLen(ComponentPortDesc *pPort);
 
 #endif

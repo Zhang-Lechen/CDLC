@@ -1,0 +1,1 @@
+CALL "C:\Program Files (x86)\NWPU\UAV\rti_connext_dds-5.2.3/bin/rtiddsgen" C:/Users/admin/Documents/my_programs/CDLC_VER0/Generate/test0309_CDL0309210752/test0309IDL.idl -ppDisable -d C:/Users/admin/Documents/my_programs/CDLC_VER0/Generate/test0309_CDL0309210752/IDLGenerate -language C++ -create typefiles -replace

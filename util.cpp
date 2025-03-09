@@ -8,6 +8,9 @@ string gFileName;
 //存储命令行参数-o后的输出路径
 string gOutputPath;
 
+map<string, int> publish_flags;
+map<string, int> receive_periods;
+
 ENVIRONMENT environment;
 
 // 简单的函数，用于去掉字符串两端的空白字符
@@ -270,5 +273,80 @@ int getPublishPeriod(ComponentPortDesc *pPort)
         return port.send_period;
     }
     return 0;
+}
+
+int getPublishPeriod(const string name)
+{
+    if (ports_info.find(name) == ports_info.end()) {
+        cerr << "Error: Port \"" << name << "\" not found." << endl;
+        return -1;
+    }
+    PortInfo port = ports_info[name];
+    if (port.port_type == PortInfo::PUBLISH && port.message == PortInfo::PERIODIC) {
+        return port.send_period;
+    }
+}
+
+int getRecvPeriod(ComponentPortDesc *pPort)
+{
+    if (ports_info.find(pPort->getName()) == ports_info.end()) {
+        cerr << "Error: Port \"" << pPort->getName() << "\" not found." << endl;
+        return -1;
+    }
+    PortInfo port = ports_info[pPort->getName()];
+    if (port.port_type == PortInfo::CONSUME && port.message == PortInfo::PERIODIC) {
+        if (port.behavior == PortInfo::SAMPLING)
+            return port.sampling_interval;
+        else if (port.behavior == PortInfo::MSGQUEUE)
+            return port.recv_period;
+    }
+    return 0;
+}
+
+int getRecvPeriod(const string name)
+{
+    if (ports_info.find(name) == ports_info.end()) {
+        cerr << "Error: Port \"" << name << "\" not found." << endl;
+        return -1;
+    }
+    PortInfo port = ports_info[name];
+    if (port.port_type == PortInfo::CONSUME && port.message == PortInfo::PERIODIC) {
+        if (port.behavior == PortInfo::SAMPLING)
+            return port.sampling_interval;
+        else if (port.behavior == PortInfo::MSGQUEUE)
+            return port.recv_period;
+    }
+    return 0;
+}
+
+int getRecvQueueLen(ComponentPortDesc *pPort)
+{
+    if (ports_info.find(pPort->getName()) == ports_info.end()) {
+        cerr << "Error: Port \"" << pPort->getName() << "\" not found." << endl;
+        return -1;
+    }
+    PortInfo port = ports_info[pPort->getName()];
+    if (port.port_type == PortInfo::CONSUME && port.message == PortInfo::PERIODIC) {
+        if (port.behavior == PortInfo::SAMPLING)
+            return port.queue_length;
+    }
+    return 0;
+}
+
+int getRecvType(const string name)
+{
+    if (ports_info.find(name) == ports_info.end()) {
+        cerr << "Error: Port \"" << name << "\" not found." << endl;
+        return -1;
+    }
+    PortInfo port = ports_info[name];
+    if (port.port_type == PortInfo::CONSUME && port.message == PortInfo::PERIODIC && port.behavior == PortInfo::SAMPLING) {
+        return RECV_SAMPLING;
+    } else if (port.port_type == PortInfo::CONSUME && port.message == PortInfo::PERIODIC && port.behavior == PortInfo::MSGQUEUE) {
+        return RECV_MSGQUEUE;
+    } else if (port.port_type == PortInfo::CONSUME && port.message == PortInfo::EVENT) {
+        return RECV_EVENT;
+    }
+    return -1;
 }
 

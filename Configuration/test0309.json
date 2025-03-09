@@ -1,0 +1,27 @@
+{
+    "test0309": {
+        "env": "windows",
+        "inputpath": "C:/Users/admin/Documents/my_programs/CDLC_VER0/Configuration/",
+        "outputpath": "C:/Users/admin/Documents/my_programs/CDLC_VER0/Generate/",
+        "OriginData1": {
+            "message":"periodic",
+            "type":"publish",
+            "period":1000
+        },
+        "OriginData2": {
+            "message":"periodic",
+            "type":"consume",
+            "method":"queue",
+            "length":100,
+            "period":1000
+        },
+        "TestData1": {
+            "message":"event",
+            "type":"publish"
+        },
+        "TestData2": {
+            "message":"event",
+            "type":"consume"
+        }
+    }
+}

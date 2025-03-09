@@ -54,8 +54,8 @@ void ECOM::Components::Transformer::FreeComponent()
 {
 
 	//====================添加的业务逻辑=====================//
-	flagNum3 = 0;
-	flagNum1 = 0;
+	flagGlobal = 0;
+	// flagNum1 = 0;
 	flagNum2 = 0;
 	//====================添加的业务逻辑=====================//
 	this->status=ECOM::Base::UnLoaded;
@@ -65,12 +65,12 @@ void ECOM::Components::Transformer::ActivateComponent()
 {
 
 	//====================添加的业务逻辑=====================//
-	if (flagNum3 == 0)
+	if (flagGlobal == 0)
 	{
 		cout << "���봴���Ĺ���" << endl;
 		boost::thread thrdb1(boost::bind(&sendMegs,this));
-		flagNum3 = 1;
-		flagNum1=1;
+		flagGlobal = 1;
+		// flagNum1=1;
 	}
 	else
 	{
@@ -99,7 +99,7 @@ void ECOM::Components::Transformer::UnActivateComponent()
 //====================周期性发送=====================//
 void sendMegs(ECOM::Components::Transformer *pCom){
 	// 设置发送周期
-	pCom->getPublishPortOriginData1()->OriginData1SendMegs(1000);
+	pCom->getPublishPortOriginData1()->OriginData1SendMegs(2000);
 }
 //====================周期性发送end=====================//
 

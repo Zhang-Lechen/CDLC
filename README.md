@@ -12,7 +12,7 @@ source code of compiler CDLC
 
 由于json文件当前统统放到了Configuration文件夹下，因此可以直接执行下面的命令：
 
-.\Debug\CDLC.exe .\Configuration\test20241026.json
+.\Debug\CDLC.exe .\Configuration\test0309.json
 
 其他配置文件类似。
 

@@ -6,10 +6,10 @@
 #include <sstream>
 
 // ================可能用不到的原代码=============//
-extern int flagNum1;
+// extern int flagNum1;
 // ================可能用不到的原代码end=============//
 extern int flagNum2;
-extern int flagNum3;
+// extern int flagNum3;
 //====================添加的业务逻辑end=====================//
 
 ECOM::Components::OriginData1::OriginData1(Transformer *pComponent,int portID,std::string portName,std::string portType,std::string portModifier){
@@ -61,10 +61,12 @@ void ECOM::Components::OriginData1::SetMessage(HelloWorld& Megs)
 	mLock.unlock();
 }
 
-//====================添加的业务逻辑=====================//
+
+//====================周期性发送=====================//
+int period = 2000;
 int joinThread()
 {
-	struct DDS_Duration_t send_period = {1,0};
+	struct DDS_Duration_t send_period = {period/1E3, period%1000*1E6};
 	int a=0;
 	while(flagNum2)
 	{
@@ -74,7 +76,7 @@ int joinThread()
 	}
 	return 0;
 }
-//====================添加的业务逻辑end=====================//
+//====================周期性发送end=====================//
 
 /***********************************************
 *OriginData1�˿ڵ����ݷ��ͺ��������ö˿��ڵ�Publish()����

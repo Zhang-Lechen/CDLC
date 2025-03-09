@@ -13,6 +13,7 @@
 /////////////ZLC MODIFIED//////////////
 #include "QtCreateUtil.h"
 #include "util.h"
+#include "Periodic.h"
 /////////////ZLC MODIFIED//////////////
 string RootDir;
 string CDLName;
@@ -1818,6 +1819,8 @@ void ComponentEntity::ComHeaderGeneration(FILE *fpHeader)
 		fprintf(fpHeader, "\tvirtual void UnActivatePlugin();\n");
 		fprintf(fpHeader,"\tvirtual void ShowPlugin();\n");
 		fprintf(fpHeader,"\tvirtual void HidePlugin();\n");
+
+		fprintf(fpHeader, "\tUi_Form *getUiForm() const{return uiForm;};\n\n");
 		//fprintf(fpHeader, "\tvirtual int OnMsgEvent(int msgMain, int msgSub1, int msgSub2, size_t length = 0, char *info = 0);\n");
 		//fprintf(fpHeader, "\tvirtual int OnDdsEvent(int msgMain, int msgSub1, int msgSub2, size_t length = 0, char *info = 0);\n\n");
 		fprintf(fpHeader,"private:\n");
@@ -1937,11 +1940,21 @@ void ComponentEntity::ComHeaderGeneration(FILE *fpHeader)
 			#include \"BaseSer.h\"\n\
 			#include \"../../../include/%s.h\"\n\
 			#include <stdarg.h>\n\
-			#include <boost/thread/mutex.hpp>\n\
-			namespace ECOM {\n\
-			namespace Components {\n\
-			class %s;\n",CDLName.c_str(),m_sName.c_str()
+			#include <boost/thread/mutex.hpp>\n\n",CDLName.c_str()
 		);
+		// 在这里判断一下是端口是否是周期性接收
+		int recvType = getRecvType(pPort->getName());
+		cout << pPort->getName() << endl;
+
+		if (recvType != RECV_EVENT) {
+			fprintf(fpPortHeader, "#include <queue>\n\n");
+		}
+		fprintf(fpPortHeader, 
+			"namespace ECOM {\n\
+			namespace Components {\n\
+			class %s;\n", m_sName.c_str()
+		);
+		
 		int PubSub = pPort->getPubSub();
 		if (PubSub == M_CONSUME)
 		{
@@ -1952,18 +1965,33 @@ void ComponentEntity::ComHeaderGeneration(FILE *fpHeader)
 			fprintf(fpPortHeader, "\t\t\t%s(%s *pComponent,int portID,std::string portName, std::string portType, std::string portModifier);\n",
 					pPort->getName().c_str(), m_sName.c_str());
 			fprintf(fpPortHeader,"\t\t\t%s *pComponent;\n",m_sName.c_str());
-			fprintf(fpPortHeader,"\t\t\tvoid ReceiveMegs();\n");
+			// 判断是否为周期性接收
+			if (recvType == RECV_EVENT)
+				fprintf(fpPortHeader,"\t\t\tvoid ReceiveMegs();\n");
+			else
+				fprintf(fpPortHeader,"\t\t\tvoid ReceiveMegs(int period);\n");
+			
+			// 如果是消息队列，需要设置buffer大小
+			if (recvType == RECV_MSGQUEUE) 
+				fprintf(fpPortHeader, "\t\t\tvoid setBufferSize(int size);\n");
 			//监听器函数begin
 			fprintf(fpPortHeader,"\t\t\tclass %sListener : public DDSDataReaderListener{\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
 			fprintf(fpPortHeader,"\t\t\tpublic:\n");
 			fprintf(fpPortHeader,"\t\t\t\t%s *pPort;\n",pPort->getName().c_str());
 			fprintf(fpPortHeader,"\t\t\t\t%sListener(%s *pPort);\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str(),
 					pPort->getName().c_str());
-			fprintf(fpPortHeader,"\t\t\t\tvirtual void on_data_available(DDSDataReader* reader);\n");
+			// 使用事件型或消息队列，用on_data_available函数接收数据
+			if (recvType == RECV_EVENT || recvType == RECV_MSGQUEUE)
+				fprintf(fpPortHeader,"\t\t\t\tvirtual void on_data_available(DDSDataReader* reader);\n");
 			fprintf(fpPortHeader,"\t\t\t};\n\n");
 			//监听器函数end
 			fprintf(fpPortHeader,"\t\tprivate:\n");
 			fprintf(fpPortHeader,"\t\t\tvoid DataProcess(%s *pinstance);\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
+			// 添加消息队列
+			if (recvType == RECV_MSGQUEUE) {
+				fprintf(fpPortHeader,"\t\t\tstd::queue<%s> msgQueue;\n", pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
+				fprintf(fpPortHeader,"\t\t\tint bufferSize;\n");
+			}
 			fprintf(fpPortHeader, "\t\t};\n\n");
 			fprintf(fpPortHeader,"\t}\n}");
 			fclose(fpPortHeader);
@@ -2046,6 +2074,33 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 	SourceDir.append(m_sName);
 	SourceDir.append("/sources/");
 
+	// 在这里设置组件内部发送端口的编号，方便后续给它们标记flagNum
+	int flagNum = 1;
+	// 周期性接收端口的数量
+	int recv_periodic_num = 0;
+	// 统计发送端口和接收端口的信息
+	for (auto it = m_listPort.begin(); it != m_listPort.end(); ++it) {
+		ComponentPortDesc *pPort = (*it);
+		// 如果是周期性发送端口，就添加flag标志位
+		if (getPublishPeriod(pPort) != 0) {
+			publish_flags[pPort->getName()] = flagNum;
+			flagNum++;
+		}
+		if (getRecvPeriod(pPort) != 0) {
+			receive_periods[pPort->getName()] = getRecvPeriod(pPort);
+			recv_periodic_num++;
+		}
+	}
+
+	if (flagNum != 1) {
+		fprintf(fpSource, "#include \"../flagSign.h\"\n");
+		fprintf(fpSource, "void sendMegs(ECOM::Components::%s *pCom);\n", m_sName.c_str());
+	}
+	// send和recv函数声明
+	if (recv_periodic_num != 0) {
+		fprintf(fpSource, "void recvMegs(ECOM::Components::%s *pCom);\n", m_sName.c_str());
+	}
+
 	if(UI_ServiceFlag == M_UI)
 	{
 		//构造函数
@@ -2100,9 +2155,18 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 
 		ComponentPortDesc *pPort = (*it);
 		int PubSub = pPort->getPubSub();
-		fprintf(fpSource,"\t\tif(it1->portName == \"%s\")\n\t\t{\n",pPort->getName().c_str());
-		fprintf(fpSource,"\t\t\tp%s = new %s(this,it1->portID,it1->portName,it1->portType,it1->portModifier);\n",pPort->getName().c_str(),pPort->getName().c_str());
-		
+
+		string name = pPort->getName();
+		fprintf(fpSource,"\t\tif(it1->portName == \"%s\")\n\t\t{\n",name.c_str());
+		fprintf(fpSource,"\t\t\tp%s = new %s(this,it1->portID,it1->portName,it1->portType,it1->portModifier);\n",name.c_str(), name.c_str());
+		// 如果是周期性接收需要添加的设置
+		int type = getRecvType(name);
+		if (type == RECV_MSGQUEUE) {
+			fprintf(fpSource, "\t\t\tp%s->setBufferSize(%d);\n", name.c_str(), getRecvQueueLen(pPort));
+		}
+		if (type == RECV_SAMPLING || type == RECV_MSGQUEUE) {
+			fprintf(fpSource, "\t\t\tboost::thread thrdb1(boost::bind(&recvMegs,this));\n");
+		}
 		fprintf(fpSource,"\t\t}\n");
 	}
 	fprintf(fpSource,"\t}\n");
@@ -2144,9 +2208,16 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 	}
 	else if(UI_ServiceFlag == M_SERVICE)
 	{
-		fprintf(fpSource,"void ECOM::Components::%s::FreeComponent()\n{\n\n\tthis->status=ECOM::Base::UnLoaded;\n}\n\n",m_sName.c_str());
-		fprintf(fpSource,"void ECOM::Components::%s::ActivateComponent()\n{\n\n\tthis->status=ECOM::Base::Activated;\n}\n\n",m_sName.c_str());
-		fprintf(fpSource,"void ECOM::Components::%s::UnActivateComponent()\n{\n\n\tthis->status=ECOM::Base::UnActivated;\n}\n\n",m_sName.c_str());
+		if (flagNum != 1) {
+			periodic_freeComp(fpSource, m_sName.c_str(), flagNum-1);
+			periodic_activateComp(fpSource, m_sName.c_str(), flagNum-1);
+			periodic_unactivateComp(fpSource, m_sName.c_str(), flagNum-1);
+		}
+		else {
+			fprintf(fpSource,"void ECOM::Components::%s::FreeComponent()\n{\n\n\tthis->status=ECOM::Base::UnLoaded;\n}\n\n",m_sName.c_str());
+			fprintf(fpSource,"void ECOM::Components::%s::ActivateComponent()\n{\n\n\tthis->status=ECOM::Base::Activated;\n}\n\n",m_sName.c_str());
+			fprintf(fpSource,"void ECOM::Components::%s::UnActivateComponent()\n{\n\n\tthis->status=ECOM::Base::UnActivated;\n}\n\n",m_sName.c_str());
+		}		
 	}
 	//构件中接口的初始化 cpp
 	vector <ComponentInterfaceDesc *>::iterator it2;
@@ -2284,6 +2355,26 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 		}
 		fclose(fpInfSource);
 	}
+	// 在端口初始化之前，检查是否存在周期性发送端口，如果存在的话就添加flagSign.h头文件
+	if (flagNum != 1) {
+		string flagSign = CDLDir;
+		flagSign.append("/Component/");
+		flagSign.append(m_sName);
+		flagSign.append("/flagSign.h");
+		FILE *fpFlagSign = fopen(flagSign.c_str(), "w");
+		fprintf(fpFlagSign, "int flagGlobal = 0;\n");
+		for (it = m_listPort.begin(); it != m_listPort.end(); ++it) {
+			ComponentPortDesc *pPort = (*it);
+			string name = pPort->getName();
+			if (publish_flags.find(name) != publish_flags.end()) {
+				fprintf(fpFlagSign, "int flagNum%d = 0;\n", publish_flags[name]);
+			}
+		}
+		fclose(fpFlagSign);
+	}
+	// 统计publish和consume端口的名字
+	vector<string> publish_names;
+	vector<string> consume_names;
 	//构件中端口的初始化 cpp
 	for (it = m_listPort.begin(); it != m_listPort.end(); ++it)
 	{
@@ -2295,9 +2386,16 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 		//端口cpp文件公共部分
 		fprintf(fpPortSource,"#include \"../include/%s.h\"\n"
 			"#include \"../include/%s.h\"\n",pPort->getName().c_str(),m_sName.c_str());
+		
+		// 在这里判断一下是端口是否是周期性接收
+		int recvType = getRecvType(m_sName);
+		if (recvType == -1)
+			throw runtime_error("Undefined Consume Port Type!!!");
+		
 		int PubSub = pPort->getPubSub();
 		if (PubSub == M_CONSUME)
 		{
+			consume_names.push_back(pPort->getName());
 			//端口构造函数
 			fprintf(fpPortSource,"ECOM::Components::%s::%s(%s *pComponent,int portID,std::string portName,"
 				"std::string portType,std::string portModifier){\n",
@@ -2334,75 +2432,20 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 			fprintf(fpPortSource,"\tthis->pPort = pPort;\n}\n\n");
 
 
+			// 设置消息队列大小
+			if (recvType == RECV_MSGQUEUE) {
+				fprintf(fpPortSource, "void ECOM::Components::%s::setBufferSize(int queue_length) {\n", pPort->getName().c_str());
+				fprintf(fpPortSource, "\tthis->bufferSize = queue_length;\n");
+				fprintf(fpPortSource, "}\n");
+			}
 			//端口on_data_available函数
 
-			fprintf(fpPortSource,"void ECOM::Components::%s::%sListener::on_data_available(DDSDataReader* reader) {\n",pPort->getName().c_str(),pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\t%sDataReader *%s_reader = NULL;\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str(),
-				pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\tDDS_SampleInfoSeq info_seq;\n");
-			fprintf(fpPortSource,"\t%sSeq data_seq;\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\tDDS_ReturnCode_t retcode;\n");
+			if (recvType == RECV_MSGQUEUE || recvType == RECV_EVENT) {
+				set_on_data_available(fpPortSource, pPort, recvType);
+			}
 
-			fprintf(fpPortSource,"\t%s_reader = %sDataReader::narrow(reader);\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str(),
-				pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\tif(%s_reader == NULL) {\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\t\t//fprintf(stderr, \"DataReader narrow error\");\n");
-			fprintf(fpPortSource,"\t\treturn;\n");
-			fprintf(fpPortSource,"\t}\n\n");
-
-			fprintf(fpPortSource,"\tretcode = %s_reader->take(data_seq, info_seq, DDS_LENGTH_UNLIMITED,DDS_ANY_SAMPLE_STATE, DDS_ANY_VIEW_STATE, DDS_ANY_INSTANCE_STATE);\n",
-				pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\tif (retcode == DDS_RETCODE_OK) {\n");
-			fprintf(fpPortSource,"\t\tfor (int i = 0; i < data_seq.length(); ++i) {\n");
-			fprintf(fpPortSource,"\t\t\tif (info_seq[i].valid_data) {\n");
-			//fprintf(fpPortSource,"\t\t\t\tECOM::Port::%s::Consume::ThreadForConsumePort%s *pPortThread = new ECOM::Port::%s::Consume::ThreadForConsumePort%s;\n",
-			//	pPort->getPortEntity()->getName().c_str(),pPort->getPortEntity()->getName().c_str(),pPort->getPortEntity()->getName().c_str(),
-			//	pPort->getPortEntity()->getName().c_str());
-			//fprintf(fpPortSource,"\t\t\t\tpPortThread->pPort = this->pPort;\n");
-			//fprintf(fpPortSource,"\t\t\t\tpPortThread->instance = data_seq[i];\n\n");
-			fprintf(fpPortSource,"\t\t\t\tthis->pPort->DataProcess(&(data_seq[i]));\n\n");
-			fprintf(fpPortSource,"\t\t\t}\n");
-			fprintf(fpPortSource,"\t\t}\n");
-			fprintf(fpPortSource,"\t%s_reader->return_loan(data_seq, info_seq);\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-
-			fprintf(fpPortSource,"\t}\n\n");
-			fprintf(fpPortSource,"}\n");
 			//端口ReceiveMegs函数
-			fprintf(fpPortSource,"//端口的主动查询式函数，如有需要可以调用\n");
-			fprintf(fpPortSource,"void ECOM::Components::%s::ReceiveMegs() {\n",pPort->getName().c_str());
-			fprintf(fpPortSource,"\t%sDataReader *%s_reader = NULL;\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str(),
-					pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\tDDS_SampleInfoSeq info_seq;\n");
-			fprintf(fpPortSource,"\t%sSeq data_seq;\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\tDDS_ReturnCode_t retcode;\n");
-			fprintf(fpPortSource,"\tDDS_Duration_t receive_period = {1,0};\n\n");
-			fprintf(fpPortSource,"\t%s_reader = %sDataReader::narrow(this->reader);\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str(),
-					pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\tif(%s_reader == NULL) {\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\t\t//fprintf(stderr, \"DataReader narrow error\");\n");
-			fprintf(fpPortSource,"\t\treturn;\n");
-			fprintf(fpPortSource,"\t}\n\n");
-			fprintf(fpPortSource,"\twhile(1){\n\n");
-			fprintf(fpPortSource,"\t\tretcode = %s_reader->take(data_seq, info_seq, DDS_LENGTH_UNLIMITED,DDS_ANY_SAMPLE_STATE, DDS_ANY_VIEW_STATE, DDS_ANY_INSTANCE_STATE);\n",
-					pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-			fprintf(fpPortSource,"\t\tif (retcode == DDS_RETCODE_OK) {\n");
-			fprintf(fpPortSource,"\t\t\tfor (int i = 0; i < data_seq.length(); ++i) {\n");
-			fprintf(fpPortSource,"\t\t\t\tif (info_seq[i].valid_data) {\n");
-			fprintf(fpPortSource,"\t\t\t\t\tECOM::Port::%s::Consume::ThreadForConsumePort%s *pPortThread = new ECOM::Port::%s::Consume::ThreadForConsumePort%s;\n",
-					pPort->getPortEntity()->getName().c_str(),pPort->getPortEntity()->getName().c_str(),pPort->getPortEntity()->getName().c_str(),
-					pPort->getPortEntity()->getName().c_str());
-			fprintf(fpPortSource,"\t\t\t\t\tpPortThread->pPort = this;\n");
-			fprintf(fpPortSource,"\t\t\t\t\tpPortThread->instance = data_seq[i];\n\n");
-			fprintf(fpPortSource,"\t\t\t\t\tboost::thread *pThread;\n");
-			fprintf(fpPortSource,"\t\t\t\t\tpThread = new boost::thread(boost::bind(&ECOM::Port::%s::Consume::ThreadForConsumePort%s::invoke,pPortThread));\n",
-					pPort->getPortEntity()->getName().c_str(),pPort->getPortEntity()->getName().c_str());
-			fprintf(fpPortSource,"\t\t\t\t}\n");
-			fprintf(fpPortSource,"\t\t\t}\n");
-			fprintf(fpPortSource,"\t\t}\n\n");
-			fprintf(fpPortSource,"\t%s_reader->return_loan(data_seq, info_seq);\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
-
-			fprintf(fpPortSource,"\t}\n\n");
-			fprintf(fpPortSource,"}\n");
+			set_receive_Megs(fpPortSource, pPort, recvType);
 
 			//端口DataProcess函数 by CJ
 			fprintf(fpPortSource,"/***********************************************\n");
@@ -2421,6 +2464,11 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 		}
 		else if (PubSub == M_PUBLISH)
 		{
+			// 周期性发送首先需要添加flag标志
+			if (getPublishPeriod(pPort) != 0) {
+				fprintf(fpPortSource, "\nextern int flagNum%d;\n\n", publish_flags[pPort->getName()]);
+			}
+			publish_names.push_back(pPort->getName());
 			//端口构造函数
 			fprintf(fpPortSource,"ECOM::Components::%s::%s(%s *pComponent,int portID,std::string portName,"
 				"std::string portType,std::string portModifier){\n",
@@ -2475,22 +2523,35 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 			fprintf(fpPortSource,"/***********************************************\n");
 			fprintf(fpPortSource,"*%s端口的数据发送函数，调用端口内的Publish()即可\n",pPort->getName().c_str());
 			fprintf(fpPortSource,"***********************************************/\n");
-			// 使用的是事件型的发送方式
-			fprintf(fpPortSource,"void ECOM::Components::%s::%sSendMegs()\n",pPort->getName().c_str(),pPort->getName().c_str());
-			fprintf(fpPortSource,"{\n");
-			fprintf(fpPortSource,"\tif (pComponent->status==ECOM::Base::Activated)\n");
-			fprintf(fpPortSource,"\t{\n");
-			fprintf(fpPortSource,"\t/***********************************************\n");
-			fprintf(fpPortSource,"\t*TODO: put your logic business code here\n");
-			fprintf(fpPortSource,"\t***********************************************/\n");
-			fprintf(fpPortSource,"\n\n\n");
-			fprintf(fpPortSource,"\t}\n");
-			fprintf(fpPortSource,"}\n\n");
+			// 使用周期性发送端口，需要手动添加joinThread函数，并修改sendMegs函数
+			if (getPublishPeriod(pPort) != 0) {
+				periodic_joinThread(fpPortSource, getPublishPeriod(pPort), publish_flags[pPort->getName()]);
+				periodic_sendMegs(fpPortSource, pPort->getName().c_str(), pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str(), publish_flags[pPort->getName()]);
+			}
+			else {
+				fprintf(fpPortSource,"void ECOM::Components::%s::%sSendMegs()\n",pPort->getName().c_str(),pPort->getName().c_str());
+				fprintf(fpPortSource,"{\n");
+				fprintf(fpPortSource,"\tif (pComponent->status==ECOM::Base::Activated)\n");
+				fprintf(fpPortSource,"\t{\n");
+				fprintf(fpPortSource,"\t/***********************************************\n");
+				fprintf(fpPortSource,"\t*TODO: put your logic business code here\n");
+				fprintf(fpPortSource,"\t***********************************************/\n");
+				fprintf(fpPortSource,"\n\n\n");
+				fprintf(fpPortSource,"\t}\n");
+				fprintf(fpPortSource,"}\n\n");
+			}
+
 
 		}
 		fclose(fpPortSource);
 	}
 
+	// 如果有周期性发送端口，需要添加sendMegs函数
+	if (flagNum != 1)
+		periodic_sendMegs(fpSource, m_sName.c_str(), publish_names);
+	if (recv_periodic_num != 0) {
+		;
+	}
 	//导出的函数为了生成DLL
 	if(UI_ServiceFlag == M_SERVICE)
 	{
@@ -2606,7 +2667,8 @@ void ReleaseCodeGeneration(char *CDLFile, char *OutputDirectory)
 	}
 
 	CDLDir = RootDir;
-	//CDLDir.append("/");
+	if (OutputDirectory[strlen(OutputDirectory)-1] != '/')
+		CDLDir.append("/");
 	CDLDir += CDLName;
 	CDLDir.append("_CDL");
 	CDLDir.append(getTime().c_str());
