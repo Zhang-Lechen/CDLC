@@ -1319,7 +1319,7 @@ void CDLFile::GenerateComponentEntity(string ComRootDir)
 				{
 					fprintf(fpSource,"#include \"../include/%s.h\"\n",(*port)->getName().c_str());
 				}
-				pCom->ComHeardGeneration(fpHeader);
+				pCom->ComHeaderGeneration(fpHeader);
 				pCom->ComSourceGeneration(fpSource);
 			}
 			fclose(fpHeader);
@@ -1764,7 +1764,7 @@ void ComponentEntity::ComSourceOnDdsEventGeneration(FILE *fpSource)
 
 
 //构件C++头文件的生成
-void ComponentEntity::ComHeardGeneration(FILE *fpHeader)
+void ComponentEntity::ComHeaderGeneration(FILE *fpHeader)
 {
 	//构件目录路径 2018.12.25
 	string HeadDir = CDLDir;
@@ -1989,7 +1989,13 @@ void ComponentEntity::ComHeardGeneration(FILE *fpHeader)
 								 "std::string portType, std::string portModifier);\n",pPort->getName().c_str(),m_sName.c_str());
 			fprintf(fpPortHeader,"\t\t\t%s *pComponent;\n",m_sName.c_str());
 			fprintf(fpPortHeader,"\t\t\tDDS_ReturnCode_t Publish();\n");
-			fprintf(fpPortHeader,"\t\t\tvoid %sSendMegs();\n",pPort->getName().c_str());
+			// 需要讨论周期和非周期的情况
+			if (getPublishPeriod(pPort) != 0) {
+				fprintf(fpPortHeader,"\t\t\tvoid %sSendMegs(int send_period));\n",pPort->getName().c_str());
+			}
+			else {
+				fprintf(fpPortHeader,"\t\t\tvoid %sSendMegs();\n",pPort->getName().c_str());
+			}
 			//by CJ
 			fprintf(fpPortHeader,"\t\t\tvoid SetMessage(%s& Megs);\n",pPort->getPortEntity()->getTypeIndex()->m_pTypeDesc->getName().c_str());
 			//CJ Coding Ending
@@ -2469,6 +2475,7 @@ void ComponentEntity::ComSourceGeneration(FILE *fpSource)
 			fprintf(fpPortSource,"/***********************************************\n");
 			fprintf(fpPortSource,"*%s端口的数据发送函数，调用端口内的Publish()即可\n",pPort->getName().c_str());
 			fprintf(fpPortSource,"***********************************************/\n");
+			// 使用的是事件型的发送方式
 			fprintf(fpPortSource,"void ECOM::Components::%s::%sSendMegs()\n",pPort->getName().c_str(),pPort->getName().c_str());
 			fprintf(fpPortSource,"{\n");
 			fprintf(fpPortSource,"\tif (pComponent->status==ECOM::Base::Activated)\n");

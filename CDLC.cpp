@@ -65,9 +65,7 @@ bool FindFileFromInputPath(string fileName, string& absolutePath)
 	while (iSetInputPath != gSetInputPath.end())
 	{
 		string strPath = *iSetInputPath;
-		cout << "strPath: " << strPath << endl;
 		strPath.append(fileName);
-		cout << "strPath: " << strPath << endl;
 		ifs.open(strPath.c_str());
 
 		if (ifs.is_open())
@@ -190,11 +188,14 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	// 显示配置信息
+	for (auto& port : ports_info) {
+		port.second.showPortInfo();
+	}
+
 	Initialize();
 
-	cout << gFileName << endl;
 	gFileName.append(".cdl");
-	cout << gOutputPath << endl;
 
 	
 	//在CompileFile里生成了中间表示

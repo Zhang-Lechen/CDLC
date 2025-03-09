@@ -12,7 +12,8 @@
             "message":"periodic",
             "type":"consume",
             "method":"queue",
-            "length":10
+            "length":10,
+            "period":20
         },
         "consumePort1_2": {
             "message":"periodic",

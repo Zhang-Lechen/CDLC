@@ -1,0 +1,36 @@
+struct HelloWorld
+{
+	string msg; 
+
+};
+
+struct PostData
+{
+	long a; 
+	long b; 
+
+};
+
+struct add_ret
+{
+	double result;
+	HelloWorld a;
+};
+
+struct add_params
+{
+	HelloWorld a;
+};
+
+struct minus_ret
+{
+	double result;
+	double b;
+};
+
+struct minus_params
+{
+	double a;
+	double b;
+};
+

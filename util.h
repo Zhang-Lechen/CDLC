@@ -10,6 +10,8 @@
 #include <string>
 #include <map>
 
+#include "cdl.h"
+
 // JSON文件规范：每一行只能有一个信息。不能在一行定义多个变量
 // 左花括号({)在定义文件名和端口名时最好和它们在同一行
 // 右花括号要使用独立的一行,不能和变量定义放在同行
@@ -39,6 +41,8 @@ struct PortInfo
         int queue_length;
         int send_period;
     };
+    // 使用消息队列需要添加的第二个参数
+    int recv_period;
 
     // 显示端口信息
     void showPortInfo();
@@ -62,5 +66,8 @@ extern ENVIRONMENT environment;
 void AppendSlashToPath(string& path);
 bool ReadFromJsonFile(const string& path);
 bool copyFile(const std::string& sourcePath, const std::string& destPath);
+
+// CodeGeneration中用到的函数
+int getPublishPeriod(ComponentPortDesc *pPort);
 
 #endif

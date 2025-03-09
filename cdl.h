@@ -451,7 +451,7 @@ public:
 	int get_UI_ServiceFlag();//廉伟杰 
 	void CodeGeneration(FILE *fpHeader, FILE *fpSource, FILE *fpIDL);
 	//lian add 2016.8.25
-	void ComHeardGeneration(FILE *fpHeader);//服务构件头文件的C++代码
+	void ComHeaderGeneration(FILE *fpHeader);//服务构件头文件的C++代码
 	void ComSourceGeneration(FILE *fpSource);//服务构件源程序cpp的c++代码
 	//void UiComHeardGeneration(FILE *fpHeader);//界面构件头文件的C++代码
 	//void UiComSourceGeneration(FILE *fpSource);//界面构件源程序cpp的c++代码

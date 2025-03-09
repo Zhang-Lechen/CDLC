@@ -70,7 +70,7 @@ bool ReadPortInfoFromJson(ifstream& ifs, const string& port_name)
     port.name = port_name;
     string line;
     while (getline(ifs, line)) {
-        // 到达json文件的末尾
+        // 到达端口定义的末尾
         if (line.find('}')!=string::npos) {
             break;
         }
@@ -113,11 +113,14 @@ bool ReadPortInfoFromJson(ifstream& ifs, const string& port_name)
             } else if (key == "period") {
                 int period;
                 if (!getJsonIntVal(line, period, pos)) {
-                    cerr << "没有正确给出发送/采样周期" << endl;
+                    cerr << "没有正确给出周期" << endl;
                     return false;
                 }
-                if (port.port_type == port.CONSUME)
+                if (port.port_type == port.CONSUME && port.behavior == port.SAMPLING)
                     port.sampling_interval = period;
+                // 这里对于consume端口的消息队列做了修改，添加了接收周期
+                else if (port.port_type == port.CONSUME && port.behavior == port.MSGQUEUE)
+                    port.recv_period = period;
                 else
                     port.send_period = period;
             }
@@ -246,12 +249,26 @@ void PortInfo::showPortInfo()
                 cout << "Sampling Interval: " << sampling_interval << "ms" << endl;
                 break;
             case MSGQUEUE:
-                cout << "Queue Length: " << queue_length << endl;
+                cout << "Queue Length: " << queue_length << '\t';
+                cout << "Receive Period: " << recv_period << "ms" << endl;
                 break;
         }
     }
     else {
         cout << endl;
     }
+}
+
+int getPublishPeriod(ComponentPortDesc *pPort)
+{
+    if (ports_info.find(pPort->getName()) == ports_info.end()) {
+        cerr << "Error: Port \"" << pPort->getName() << "\" not found." << endl;
+        return -1;
+    }
+    PortInfo port = ports_info[pPort->getName()];
+    if (port.port_type == PortInfo::PUBLISH && port.message == PortInfo::PERIODIC) {
+        return port.send_period;
+    }
+    return 0;
 }
 
